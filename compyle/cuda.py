@@ -18,14 +18,14 @@ from pycuda.tools import dtype_to_ctype
 from pytools import memoize
 import numpy as np
 import six
-_cuda_ctx = False
+cuda_ctx = False
 
 
 def set_context():
-    global _cuda_ctx
-    if not _cuda_ctx:
+    global cuda_ctx
+    if not cuda_ctx:
         import pycuda.autoinit
-        _cuda_ctx = True
+        cuda_ctx = True
 
 
 # The following code is taken from pyopencl for struct mapping.

@@ -11,6 +11,8 @@ def test_sort():
     length = 100
     a = np.array(np.random.rand(length), dtype=np.float32)
     b = wrap(a, backend='cuda')
+    print(b)
     res_gpu = argsort(b).get()
+    print(b)
     res_cpu = np.argsort(a)
     assert np.all(res_gpu == res_cpu)

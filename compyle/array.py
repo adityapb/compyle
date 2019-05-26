@@ -486,7 +486,7 @@ def argsort(ary, backend=None):
         backend = ary.backend
     if backend == 'cython':
         result = np.argsort(ary.dev)
-        ary.dev = np.take(ary.dev, result)
+        ary.set_data(np.take(ary.dev, result))
         return wrap_array(result, backend=backend)
     elif backend == 'cuda':
         from compyle.cuda import argsort
@@ -495,10 +495,18 @@ def argsort(ary, backend=None):
         raise ValueError("Only cython and cuda backends supported")
 
 
-def update_minmax_gpu(ary_list, only_min=False, only_max=False,
+def update_minmax(ary_list, only_min=False, only_max=False,
                       backend=None):
     if not backend:
         backend = ary_list[0].backend
+
+    if backend == 'cython':
+        for ary in ary_list:
+            ary.minimum = minimum(ary, backend=ary.backend)
+            ary.maximum = maximum(ary, backend=ary.backend)
+            ary.minimum = ary.minimum.astype(ary.dtype)
+            ary.maximum = ary.maximum.astype(ary.dtype)
+        return
 
     if only_min and only_max:
         raise ValueError("Only one of only_min and only_max can be True")
@@ -601,8 +609,9 @@ class AlignMultiple(Template):
 
     def template(self, i, order):
         '''
+        idx = order[i]
         % for num in range(obj.num_arys):
-        out_${num}[i] = inp_${num}[order[i]]
+        out_${num}[i] = inp_${num}[idx]
         % endfor
         '''
 
@@ -648,9 +657,6 @@ def align(ary_list, order, out_list=None, backend=None):
 class Array(object):
     def __init__(self, dtype, n=0, allocate=True, backend=None):
         self.backend = get_backend(backend)
-        if backend == 'cuda':
-            from .cuda import set_context
-            set_context()
         self.dtype = dtype
         self.gptr_type = dtype_to_knowntype(dtype, address='global')
         self.minimum = 0
@@ -808,14 +814,7 @@ class Array(object):
         return arr_copy
 
     def update_min_max(self, only_min=False, only_max=False):
-        if self.backend == 'cython':
-            self.minimum = minimum(self, backend=self.backend)
-            self.maximum = maximum(self, backend=self.backend)
-            self.minimum = self.minimum.astype(self.dtype)
-            self.maximum = self.maximum.astype(self.dtype)
-        else:
-            update_minmax_gpu([self])
-
+        update_minmax([self], only_min=only_min, only_max=only_max)
 
     def fill(self, value):
         self.dev.fill(value)

@@ -76,4 +76,5 @@ if __name__ == '__main__':
     o = p.parse_args()
     get_config().use_openmp = o.openmp
     get_config().use_double = o.use_double
+    o.backend = 'cuda'
     run(o.n, o.backend)

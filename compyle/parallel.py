@@ -380,7 +380,7 @@ class ElementwiseBase(object):
         backend = array.get_backend(backend)
         self.tp = Transpiler(backend=backend)
         self.backend = backend
-        self.name = func.__name__
+        self.name = 'elwise_%s' % func.__name__
         self.func = func
         self._config = get_config()
         self.cython_gen = CythonGenerator()
@@ -428,7 +428,7 @@ class ElementwiseBase(object):
             )
             knl = ElementwiseKernel(
                 ctx,
-                name='elwise_%s' % self.name,
+                name=self.name,
                 arguments=arguments,
                 operation=expr,
                 preamble="\n".join([cluda_preamble, preamble])
@@ -453,7 +453,7 @@ class ElementwiseBase(object):
                 double_support=True
             )
             knl = ElementwiseKernel(
-                name='elwise_%s' % self.name,
+                name=self.name,
                 arguments=arguments,
                 operation=expr,
                 preamble="\n".join([cluda_preamble, preamble])
