@@ -1,5 +1,8 @@
 from compyle.api import annotate, Elementwise, wrap, get_config, declare
-from pyzoltan.hetero.load_balancer import adapt_lb, LoadBalancer
+from pyzoltan.hetero.partition_manager import PartitionManager
+from pyzoltan.hetero.cell_manager import CellManager
+from pyzoltan.hetero.object_exchange import ObjectExchange
+
 from pyzoltan.hetero.parallel_manager import only_root, ParallelManager
 from pyzoltan.hetero.rcb import dbg_print, root_print
 from pyzoltan.hetero.profile import profile
@@ -13,21 +16,26 @@ def f(i, x, y, z, niter):
         z[i] += x[i] * x[i] + y[i] * y[i]
 
 
-class Solver(ParallelManager):
+class Solver(object):
     def __init__(self, n, lbfreq=10):
-        super(Solver, self).__init__()
+        #super(Solver, self).__init__()
+        self.backend = backend
         self.func = Elementwise(f, backend=self.backend)
         self.n = n
         self.lbfreq = lbfreq
         self.x, self.y, self.z = None, None, None
         self.init_arrays()
-        self.init_lb(self.lbfreq)
+        self.init_partition_manager()
 
-    def init_lb(self, lbfreq):
-        self.lbfreq = lbfreq
-        self.lb = LoadBalancer(2, np.float32, backend=self.backend)
-        self.lb.set_coords(x=self.x, y=self.y)
-        self.lb.set_data(z=self.z)
+    def init_partition_manager(self):
+        self.pm = PartitionManager(2, np.float32, backend=self.backend)
+        obj_exchg = ObjectExchange()
+        cm = CellManager(2, np.float32, 0.1, num_objs=self.n)
+        self.pm.set_lbfreq(self.lbfreq)
+        self.pm.set_object_exchange(obj_exchg)
+        self.pm.set_cell_manager(cm)
+        self.pm.set_coords([self.x, self.y])
+        self.pm.setup_load_balancer()
 
     @only_root
     def init_arrays(self):
@@ -37,19 +45,12 @@ class Solver(ParallelManager):
         x, y, z = x.astype(np.float32), y.astype(np.float32), z.astype(np.float32)
         self.x, self.y, self.z = wrap(x, y, z, backend=self.backend)
 
-    @adapt_lb(lb_name='lb')
+    #@adapt_lb(lb_name='lb')
     def step(self, x, y, z, niter):
         self.func(x, y, z, niter)
 
     def solve(self, niter):
-        for i in range(niter):
-            dbg_print("Iteration no. %s" % (i + 1))
-            if i % self.lbfreq == 0:
-                self.lb.load_balance()
-                dbg_print("Weight = %s" % self.lb.lb_data.proc_weights)
-            self.step(self.lb.lb_data.x, self.lb.lb_data.y, self.lb.lb_data.z,
-                      1000)
-        self.lb.gather()
+        self.pm.update()
 
     @only_root
     def check(self):

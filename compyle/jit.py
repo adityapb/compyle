@@ -128,6 +128,7 @@ class AnnotationHelper(ast.NodeVisitor):
         self._src = src.splitlines()
         code = ast.parse(src)
         self.visit(code)
+        #print(self.arg_types)
         self.func = annotate(self.func, **self.arg_types)
         return self.get_missing_declarations(self.undecl_var_types)
 
