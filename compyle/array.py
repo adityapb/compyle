@@ -489,8 +489,9 @@ def argsort(ary, backend=None):
         ary.set_data(np.take(ary.dev, result))
         return wrap_array(result, backend=backend)
     elif backend == 'cuda':
-        from compyle.cuda import argsort
-        return argsort(ary)
+        from compyle.cuda import argsort, get_device_id
+        ctx = get_device_id()
+        return argsort(ary, device_id=get_device_id())
     else:
         raise ValueError("Only cython and cuda backends supported")
 

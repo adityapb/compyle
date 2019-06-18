@@ -18,14 +18,34 @@ from pycuda.tools import dtype_to_ctype
 from pytools import memoize
 import numpy as np
 import six
-cuda_ctx = False
+cuda_ctx = None
+cuda_device_id = None
 
 
-def set_context():
+def set_context(device_id=0):
     global cuda_ctx
+    global cuda_device_id
+
     if not cuda_ctx:
-        import pycuda.autoinit
-        cuda_ctx = True
+        drv.init()
+        dev = drv.Device(device_id)
+        ctx = dev.make_context()
+
+        cuda_ctx = ctx
+        cuda_device_id = device_id
+
+    return cuda_ctx
+
+
+def get_context():
+    global cuda_ctx
+    return cuda_ctx
+
+
+def get_device_id():
+    global cuda_device_id
+    return cuda_device_id
+
 
 
 # The following code is taken from pyopencl for struct mapping.

@@ -2,24 +2,51 @@ from compyle.api import annotate, Elementwise, wrap, get_config, declare
 from pyzoltan.hetero.partition_manager import PartitionManager
 from pyzoltan.hetero.cell_manager import CellManager
 from pyzoltan.hetero.object_exchange import ObjectExchange
+from pyzoltan.hetero.utils import make_context
+from compyle.cuda import get_context
 
 from pyzoltan.hetero.parallel_manager import only_root, ParallelManager
 from pyzoltan.hetero.rcb import dbg_print, root_print
 from pyzoltan.hetero.profile import profile
+import compyle.array as carr
 import numpy as np
 
 
 @annotate
-def f(i, x, y, z, niter):
-    z[i] = 0
-    for j in range(niter):
-        z[i] += x[i] * x[i] + y[i] * y[i]
+def f(i, x, y, z):
+    z[i] = x[i] * x[i] + y[i] * y[i]
+
+
+class MyObjectExchange(ObjectExchange):
+    def __init__(self, x, y, z, backend):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.backend = backend
+
+    def lb_transfer(self):
+        x_new = carr.empty(self.plan.nreturn, np.float32,
+                           backend=self.backend)
+        y_new = carr.empty(self.plan.nreturn, np.float32,
+                           backend=self.backend)
+        z_new = carr.empty(self.plan.nreturn, np.float32,
+                           backend=self.backend)
+
+        self.plan.comm_do_post(self.x, x_new)
+        self.plan.comm_do_post(self.y, y_new)
+        self.plan.comm_do_post(self.z, z_new)
+
+        self.plan.comm_do_wait()
+
+        self.x = x_new
+        self.y = y_new
+        self.z = z_new
 
 
 class Solver(object):
     def __init__(self, n, lbfreq=10):
-        #super(Solver, self).__init__()
-        self.backend = backend
+        self.backend = 'cuda'
+        self.ctx = make_context()
         self.func = Elementwise(f, backend=self.backend)
         self.n = n
         self.lbfreq = lbfreq
@@ -29,12 +56,12 @@ class Solver(object):
 
     def init_partition_manager(self):
         self.pm = PartitionManager(2, np.float32, backend=self.backend)
-        obj_exchg = ObjectExchange()
-        cm = CellManager(2, np.float32, 0.1, num_objs=self.n)
+        self.oe = MyObjectExchange(self.x, self.y, self.z, self.backend)
+        cm = CellManager(2, np.float32, 0.1, num_objs=self.n ** 2,
+                         backend=self.backend)
         self.pm.set_lbfreq(self.lbfreq)
-        self.pm.set_object_exchange(obj_exchg)
+        self.pm.set_object_exchange(self.oe)
         self.pm.set_cell_manager(cm)
-        self.pm.set_coords([self.x, self.y])
         self.pm.setup_load_balancer()
 
     @only_root
@@ -45,27 +72,30 @@ class Solver(object):
         x, y, z = x.astype(np.float32), y.astype(np.float32), z.astype(np.float32)
         self.x, self.y, self.z = wrap(x, y, z, backend=self.backend)
 
-    #@adapt_lb(lb_name='lb')
-    def step(self, x, y, z, niter):
-        self.func(x, y, z, niter)
+    def step(self, x, y, z):
+        self.func(x, y, z)
 
     def solve(self, niter):
-        self.pm.update()
+        for i in range(niter):
+            self.pm.update(self.oe.x, self.oe.y, migrate=False)
+            self.step(self.oe.x, self.oe.y, self.oe.z)
+        self.oe.gather()
 
     @only_root
     def check(self):
-        x = self.lb.lb_data.x.get()#.reshape((self.n, self.n))
-        y = self.lb.lb_data.y.get()#.reshape((self.n, self.n))
-        z = self.lb.lb_data.z.get()#.reshape((self.n, self.n))
+        x = self.oe.x.get()
+        y = self.oe.y.get()
+        z = self.oe.z.get()
         z_calc = x**2 + y**2
         assert np.allclose(z, z_calc)
 
 
-@profile(filename="profile_out")
+#@profile(filename="profile_out")
 def run():
-    solver = Solver(300)
-    solver.solve(500)
-    #solver.check()
+    solver = Solver(3000)
+    solver.solve(1)
+    solver.check()
+    solver.ctx.pop()
 
 
 if __name__ == "__main__":

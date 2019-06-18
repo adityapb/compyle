@@ -2,9 +2,10 @@ import cupy.cuda.thrust as thrust
 from libcpp.vector cimport vector
 import compyle.array as carr
 import numpy as np
+import cupy as cp
 
 
-cpdef argsort(array, keys=None):
+cpdef argsort(array, keys=None, device_id=0):
     idx_array = carr.empty(array.length, np.intp, backend='cuda')
 
     cdef vector[int] shape
