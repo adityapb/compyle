@@ -24,7 +24,7 @@ class MyObjectExchange(ObjectExchange):
         self.z = z
         self.backend = backend
 
-    def lb_transfer(self):
+    def transfer(self):
         x_new = carr.empty(self.plan.nreturn, np.float32,
                            backend=self.backend)
         y_new = carr.empty(self.plan.nreturn, np.float32,
@@ -42,6 +42,8 @@ class MyObjectExchange(ObjectExchange):
         self.y = y_new
         self.z = z_new
 
+        return self.x, self.y
+
 
 class Solver(object):
     def __init__(self, n, lbfreq=10):
@@ -57,8 +59,7 @@ class Solver(object):
     def init_partition_manager(self):
         self.pm = PartitionManager(2, np.float32, backend=self.backend)
         self.oe = MyObjectExchange(self.x, self.y, self.z, self.backend)
-        cm = CellManager(2, np.float32, 0.1, num_objs=self.n ** 2,
-                         backend=self.backend)
+        cm = CellManager(2, np.float32, 0.1, backend=self.backend)
         self.pm.set_lbfreq(self.lbfreq)
         self.pm.set_object_exchange(self.oe)
         self.pm.set_cell_manager(cm)
@@ -77,7 +78,7 @@ class Solver(object):
 
     def solve(self, niter):
         for i in range(niter):
-            self.pm.update(self.oe.x, self.oe.y, migrate=False)
+            self.pm.update(self.oe.x, self.oe.y, migrate=True)
             self.step(self.oe.x, self.oe.y, self.oe.z)
         self.oe.gather()
 
@@ -93,7 +94,7 @@ class Solver(object):
 #@profile(filename="profile_out")
 def run():
     solver = Solver(3000)
-    solver.solve(1)
+    solver.solve(20)
     solver.check()
     solver.ctx.pop()
 
