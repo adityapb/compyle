@@ -13,8 +13,9 @@ import numpy as np
 
 
 @annotate
-def f(i, x, y, z):
-    z[i] = x[i] * x[i] + y[i] * y[i]
+def f(i, x, y, z, niter):
+    for j in range(niter):
+        z[i] = x[i] * x[i] + y[i] * y[i]
 
 
 class MyObjectExchange(ObjectExchange):
@@ -57,7 +58,8 @@ class Solver(object):
         self.init_partition_manager()
 
     def init_partition_manager(self):
-        self.pm = PartitionManager(2, np.float32, backend=self.backend)
+        self.pm = PartitionManager(2, np.float32, migrate=False,
+                                   backend=self.backend)
         self.oe = MyObjectExchange(self.x, self.y, self.z, self.backend)
         cm = CellManager(2, np.float32, 0.1, backend=self.backend)
         self.pm.set_lbfreq(self.lbfreq)
@@ -74,12 +76,11 @@ class Solver(object):
         self.x, self.y, self.z = wrap(x, y, z, backend=self.backend)
 
     def step(self, x, y, z):
-        self.func(x, y, z)
+        self.func(x, y, z, 65536)
 
-    def solve(self, niter):
-        for i in range(niter):
-            self.pm.update(self.oe.x, self.oe.y, migrate=True)
-            self.step(self.oe.x, self.oe.y, self.oe.z)
+    def solve(self):
+        self.pm.update(self.oe.x, self.oe.y)
+        self.step(self.oe.x, self.oe.y, self.oe.z)
         self.oe.gather()
 
     @only_root
@@ -93,9 +94,9 @@ class Solver(object):
 
 #@profile(filename="profile_out")
 def run():
-    solver = Solver(3000)
-    solver.solve(20)
-    solver.check()
+    solver = Solver(5000)
+    solver.solve()
+    #solver.check()
     solver.ctx.pop()
 
 

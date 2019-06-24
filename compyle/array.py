@@ -569,7 +569,7 @@ def take(ary, indices, backend=None, out=None):
         take_knl = parallel.Elementwise(take_elwise, backend=backend)
         take_knl(indices, ary, out)
     elif backend == 'cython':
-        np.take(ary.dev, indices.dev, out=out.dev)
+        ary.dev.take(indices.dev, out=out.dev)
     return out
 
 
