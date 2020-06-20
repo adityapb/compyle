@@ -223,7 +223,7 @@ if __name__ == '__main__':
     get_config().use_openmp = o.openmp
     get_config().use_double = o.use_double
 
-    solver = MDSolver(o.n, backend=o.backend, use_count_sort=o.use_count_sort)
+    solver = MDSolver(o.n, backend=o.backend, dx=2., use_count_sort=o.use_count_sort)
 
     start = time.time()
     solver.solve(o.t, o.dt)
